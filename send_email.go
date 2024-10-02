@@ -1,6 +1,7 @@
 package msgraph
 
 import (
+	"encoding/base64"
 	"fmt"
 )
 
@@ -10,7 +11,7 @@ type Http202 struct {
 }
 
 // SendEmail sends an email using Microsoft Graph API
-func (c *Client) SendEmail(subject, body string, contentType ContentType, saveSentItems bool, toRecipients, ccRecipients, bccRecipients []string) error {
+func (c *Client) SendEmail(subject, body string, contentType ContentType, saveSentItems bool, toRecipients, ccRecipients, bccRecipients []string, attachs []Attachment) error {
 	if c.Token == nil {
 		return fmt.Errorf("missing access token. Please obtain one first")
 	}
@@ -32,6 +33,7 @@ func (c *Client) SendEmail(subject, body string, contentType ContentType, saveSe
 			ToRecipients:  SetRecipients(toRecipients),
 			CcRecipients:  SetRecipients(ccRecipients),
 			BccRecipients: SetRecipients(bccRecipients),
+			Attachments:   attachs,
 		},
 		SaveToSentItems: saveSentItems,
 	}
@@ -53,4 +55,16 @@ func SetRecipients(recipients []string) []Recipient {
 		}
 	}
 	return result
+}
+
+func createAttachment(filePath string, fileContent []byte) (map[string]interface{}, error) {
+
+	attachment := map[string]interface{}{
+		"@odata.type":  "#microsoft.graph.fileAttachment",
+		"name":         filePath,
+		"contentType":  "application/octet-stream", // Altere para o tipo correto
+		"contentBytes": base64.StdEncoding.EncodeToString(fileContent),
+	}
+
+	return attachment, nil
 }

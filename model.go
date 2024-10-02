@@ -1,27 +1,34 @@
 package msgraph
 
-import (
-	"fmt"
-)
-
 // ContentType represents the content type of an email message
-type ContentType int
+type ContentType string
 
 const (
-	TextContentType ContentType = iota
-	HtmlContentType
+	ContentTypeText ContentType = "text"
+	ContentTypeHTML ContentType = "html"
 )
 
-// String returns the string representation of a ContentType
-func (ct ContentType) String() string {
-	switch ct {
-	case TextContentType:
-		return "text"
-	case HtmlContentType:
-		return "html"
-	default:
-		return fmt.Sprintf("UnknownContentType(%d)", ct)
-	}
+func (enum ContentType) String() string {
+	return string(enum)
+}
+
+type AttachContentType string
+
+const (
+	AttachContentTypePDF  AttachContentType = "application/pdf"
+	AttachContentTypePNG  AttachContentType = "image/png"
+	AttachContentTypeJPEG AttachContentType = "image/jpeg"
+	AttachContentTypeTXT  AttachContentType = "text/plain"
+	AttachContentTypeDOCX AttachContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	AttachContentTypeXLSX AttachContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	AttachContentTypeZIP  AttachContentType = "application/zip"
+	AttachContentTypeHTML AttachContentType = "text/html"
+	AttachContentTypeJSON AttachContentType = "application/json"
+	AttachContentTypeXML  AttachContentType = "application/xml"
+)
+
+func (enum AttachContentType) String() string {
+	return string(enum)
 }
 
 type EmailAddress struct {
@@ -37,12 +44,20 @@ type Body struct {
 	Content     string `json:"content"`
 }
 
+type Attachment struct {
+	ODataType    string `json:"@odata.type"`
+	Name         string `json:"name"`
+	ContentType  string `json:"contentType"`
+	ContentBytes string `json:"contentBytes"`
+}
+
 type Message struct {
-	Subject       string      `json:"subject"`
-	Body          Body        `json:"body"`
-	ToRecipients  []Recipient `json:"toRecipients"`
-	CcRecipients  []Recipient `json:"ccRecipients"`
-	BccRecipients []Recipient `json:"bccRecipients"`
+	Subject       string       `json:"subject"`
+	Body          Body         `json:"body"`
+	ToRecipients  []Recipient  `json:"toRecipients"`
+	CcRecipients  []Recipient  `json:"ccRecipients"`
+	BccRecipients []Recipient  `json:"bccRecipients"`
+	Attachments   []Attachment `json:"attachments,omitempty"`
 }
 
 type SendMailRequest struct {
@@ -60,8 +75,8 @@ type UserInfo struct {
 	GivenName          string   `json:"givenName"`
 	PreferredLanguage  string   `json:"preferredLanguage"`
 	Mail               string   `json:"mail"`
-	MobilePhone        *string  `json:"mobilePhone"`    // Can be null
-	JobTitle           *string  `json:"jobTitle"`       // Can be null
-	OfficeLocation     *string  `json:"officeLocation"` // Can be null
-	BusinessPhones     []string `json:"businessPhones"` // Empty array
+	MobilePhone        *string  `json:"mobilePhone"`
+	JobTitle           *string  `json:"jobTitle"`
+	OfficeLocation     *string  `json:"officeLocation"`
+	BusinessPhones     []string `json:"businessPhones"`
 }
