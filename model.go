@@ -49,3 +49,19 @@ type SendMailRequest struct {
 	Message         Message `json:"message"`
 	SaveToSentItems bool    `json:"saveToSentItems"`
 }
+
+type UserInfo struct {
+	OdataContext       string   `json:"@odata.context"`
+	MicrosoftGraphTips string   `json:"@microsoft.graph.tips"`
+	UserPrincipalName  string   `json:"userPrincipalName"`
+	ID                 string   `json:"id"`
+	DisplayName        string   `json:"displayName"`
+	Surname            string   `json:"surname"`
+	GivenName          string   `json:"givenName"`
+	PreferredLanguage  string   `json:"preferredLanguage"`
+	Mail               string   `json:"mail"`
+	MobilePhone        *string  `json:"mobilePhone"`    // Can be null
+	JobTitle           *string  `json:"jobTitle"`       // Can be null
+	OfficeLocation     *string  `json:"officeLocation"` // Can be null
+	BusinessPhones     []string `json:"businessPhones"` // Empty array
+}
