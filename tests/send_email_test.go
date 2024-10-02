@@ -29,7 +29,29 @@ func TestSendEmail(t *testing.T) {
 		TokenType:    "Bearer",
 	}
 
-	err := sdk.SendEmail("test email", "Application has sucessfully sent an email", msgraph.TextContentType, false, []string{"jacocasa@gmail.com"}, []string{}, []string{})
+	err := sdk.SendEmail("test email",
+		"Application has sucessfully sent an email",
+		msgraph.ContentTypeText,
+		false,
+		[]string{"jacocasa@gmail.com"},
+		[]string{},
+		[]string{},
+		[]msgraph.Attachment{})
 
 	assert.NoError(t, err)
+}
+
+func TestUserInfo(t *testing.T) {
+	sdk := msgraph.NewClient(cfg)
+
+	sdk.Token = &oauth2.Token{
+		RefreshToken: "",
+		TokenType:    "Bearer",
+	}
+
+	userInfo, err := sdk.GetUserInfo()
+
+	assert.NoError(t, err)
+	assert.NotNil(t, userInfo)
+
 }

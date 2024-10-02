@@ -17,7 +17,7 @@ func (c *Client) GetUserInfo() (*UserInfo, error) {
 
 	userInfo := &UserInfo{}
 
-	err := c.Post("/me", nil, nil, userInfo)
+	err := c.Get("/me", nil, nil, userInfo)
 
 	return userInfo, err
 }
