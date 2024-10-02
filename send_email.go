@@ -1,7 +1,6 @@
 package msgraph
 
 import (
-	"encoding/base64"
 	"fmt"
 )
 
@@ -55,16 +54,4 @@ func SetRecipients(recipients []string) []Recipient {
 		}
 	}
 	return result
-}
-
-func createAttachment(filePath string, fileContent []byte) (map[string]interface{}, error) {
-
-	attachment := map[string]interface{}{
-		"@odata.type":  "#microsoft.graph.fileAttachment",
-		"name":         filePath,
-		"contentType":  "application/octet-stream", // Altere para o tipo correto
-		"contentBytes": base64.StdEncoding.EncodeToString(fileContent),
-	}
-
-	return attachment, nil
 }
