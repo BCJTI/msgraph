@@ -54,9 +54,9 @@ type Attachment struct {
 type Message struct {
 	Subject       string       `json:"subject"`
 	Body          Body         `json:"body"`
-	ToRecipients  []Recipient  `json:"toRecipients"`
-	CcRecipients  []Recipient  `json:"ccRecipients"`
-	BccRecipients []Recipient  `json:"bccRecipients"`
+	ToRecipients  []Recipient  `json:"toRecipients,omitempty"`
+	CcRecipients  []Recipient  `json:"ccRecipients,omitempty"`
+	BccRecipients []Recipient  `json:"bccRecipients,omitempty"`
 	Attachments   []Attachment `json:"attachments,omitempty"`
 }
 

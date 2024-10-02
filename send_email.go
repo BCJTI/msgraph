@@ -45,12 +45,13 @@ func (c *Client) SendEmail(subject, body string, contentType ContentType, saveSe
 }
 
 func SetRecipients(recipients []string) []Recipient {
-	result := make([]Recipient, len(recipients))
-	for i, recipient := range recipients {
-		result[i] = Recipient{
-			EmailAddress: EmailAddress{
-				Address: recipient,
-			},
+	result := make([]Recipient, 0)
+	for _, recipient := range recipients {
+		if recipient != "" {
+			result = append(result, Recipient{
+				EmailAddress: EmailAddress{
+					Address: recipient,
+				}})
 		}
 	}
 	return result
