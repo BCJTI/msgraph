@@ -128,7 +128,7 @@ func (c *Client) execute(method string, path string, params interface{}, headers
 	}
 
 	// parse data
-	return json.Unmarshal(data, model)
+	return nil
 
 }
 
