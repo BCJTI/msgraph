@@ -109,6 +109,13 @@ func (c *Client) execute(method string, path string, params interface{}, headers
 		if err = json.Unmarshal(data, msg); err == nil && msg.ErrorMessage != "" {
 			return msg
 		}
+
+		if err != nil {
+			return err
+		}
+
+		err = json.Unmarshal(data, model)
+
 		if err != nil {
 			return err
 		}
