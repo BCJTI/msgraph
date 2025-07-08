@@ -67,9 +67,6 @@ func (c *Client) OAuthRefreshToken() error {
 		tokenSource := c.config.TokenSource(context.Background(), c.Token)
 		tmpToken, err := tokenSource.Token()
 		c.Token = tmpToken
-		if err != nil {
-			return nil
-		}
 		return err
 	}
 
