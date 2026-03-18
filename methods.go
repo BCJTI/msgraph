@@ -3,6 +3,7 @@ package msgraph
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -88,6 +89,17 @@ func (c *Client) execute(method string, path string, params interface{}, headers
 		}
 	}
 
+	if c.Debug {
+		fmt.Printf("[DEBUG] %s %s\n", request.Method, request.URL.String())
+		for k, v := range request.Header {
+			if k == "Authorization" {
+				fmt.Printf("[DEBUG] Header %s: %s...]\n", k, v[0][:30])
+			} else {
+				fmt.Printf("[DEBUG] Header %s: %s\n", k, v)
+			}
+		}
+	}
+
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		return err
@@ -99,6 +111,15 @@ func (c *Client) execute(method string, path string, params interface{}, headers
 	data, err := io.ReadAll(response.Body)
 	if err != nil {
 		return err
+	}
+
+	if c.Debug {
+		fmt.Printf("[DEBUG] Response Status: %d\n", response.StatusCode)
+		body := string(data)
+		if len(body) > 500 {
+			body = body[:500] + "..."
+		}
+		fmt.Printf("[DEBUG] Response Body: %s\n", body)
 	}
 
 	// init error response
@@ -155,6 +176,10 @@ func (c *Client) executeRaw(method string, path string, headers Headers) ([]byte
 		}
 	}
 
+	if c.Debug {
+		fmt.Printf("[DEBUG] %s %s\n", request.Method, request.URL.String())
+	}
+
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		return nil, err
@@ -165,6 +190,11 @@ func (c *Client) executeRaw(method string, path string, headers Headers) ([]byte
 	data, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, err
+	}
+
+	if c.Debug {
+		fmt.Printf("[DEBUG] Response Status: %d\n", response.StatusCode)
+		fmt.Printf("[DEBUG] Response Size: %d bytes\n", len(data))
 	}
 
 	if NotIn(response.StatusCode, http.StatusOK, http.StatusCreated, http.StatusAccepted) {

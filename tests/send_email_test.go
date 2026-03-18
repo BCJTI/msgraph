@@ -1,9 +1,10 @@
 package tests
 
 import (
+	"testing"
+
 	"github.com/bcjti/msgraph"
 	"golang.org/x/oauth2"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
