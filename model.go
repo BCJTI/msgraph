@@ -32,6 +32,7 @@ func (enum AttachContentType) String() string {
 }
 
 type EmailAddress struct {
+	Name    string `json:"name,omitempty"`
 	Address string `json:"address"`
 }
 
@@ -52,17 +53,70 @@ type Attachment struct {
 }
 
 type Message struct {
-	Subject       string       `json:"subject"`
-	Body          Body         `json:"body"`
-	ToRecipients  []Recipient  `json:"toRecipients,omitempty"`
-	CcRecipients  []Recipient  `json:"ccRecipients,omitempty"`
-	BccRecipients []Recipient  `json:"bccRecipients,omitempty"`
-	Attachments   []Attachment `json:"attachments,omitempty"`
+	ID                         string       `json:"id,omitempty"`
+	CreatedDateTime            string       `json:"createdDateTime,omitempty"`
+	LastModifiedDateTime       string       `json:"lastModifiedDateTime,omitempty"`
+	ReceivedDateTime           string       `json:"receivedDateTime,omitempty"`
+	SentDateTime               string       `json:"sentDateTime,omitempty"`
+	HasAttachments             bool         `json:"hasAttachments,omitempty"`
+	InternetMessageID          string       `json:"internetMessageId,omitempty"`
+	Subject                    string       `json:"subject"`
+	BodyPreview                string       `json:"bodyPreview,omitempty"`
+	Importance                 string       `json:"importance,omitempty"`
+	ParentFolderID             string       `json:"parentFolderId,omitempty"`
+	ConversationID             string       `json:"conversationId,omitempty"`
+	IsDeliveryReceiptRequested bool         `json:"isDeliveryReceiptRequested,omitempty"`
+	IsReadReceiptRequested     bool         `json:"isReadReceiptRequested,omitempty"`
+	IsRead                     bool         `json:"isRead,omitempty"`
+	IsDraft                    bool         `json:"isDraft,omitempty"`
+	WebLink                    string       `json:"webLink,omitempty"`
+	InferenceClassification    string       `json:"inferenceClassification,omitempty"`
+	Body                       Body         `json:"body"`
+	Sender                     *Recipient   `json:"sender,omitempty"`
+	From                       *Recipient   `json:"from,omitempty"`
+	ReplyTo                    []Recipient  `json:"replyTo,omitempty"`
+	ToRecipients               []Recipient  `json:"toRecipients,omitempty"`
+	CcRecipients               []Recipient  `json:"ccRecipients,omitempty"`
+	BccRecipients              []Recipient  `json:"bccRecipients,omitempty"`
+	Attachments                []Attachment `json:"attachments,omitempty"`
 }
 
 type SendMailRequest struct {
 	Message         Message `json:"message"`
 	SaveToSentItems bool    `json:"saveToSentItems"`
+}
+
+type MessageListResponse struct {
+	ODataContext  string    `json:"@odata.context,omitempty"`
+	ODataNextLink string    `json:"@odata.nextLink,omitempty"`
+	Value         []Message `json:"value"`
+}
+
+type FileAttachment struct {
+	ODataType            string `json:"@odata.type,omitempty"`
+	ID                   string `json:"id,omitempty"`
+	LastModifiedDateTime string `json:"lastModifiedDateTime,omitempty"`
+	Name                 string `json:"name"`
+	ContentType          string `json:"contentType"`
+	Size                 int    `json:"size,omitempty"`
+	IsInline             bool   `json:"isInline,omitempty"`
+	ContentID            string `json:"contentId,omitempty"`
+	ContentLocation      string `json:"contentLocation,omitempty"`
+	ContentBytes         string `json:"contentBytes,omitempty"`
+}
+
+type AttachmentListResponse struct {
+	ODataContext string           `json:"@odata.context,omitempty"`
+	Value        []FileAttachment `json:"value"`
+}
+
+type ListMessagesOptions struct {
+	Top     int
+	Skip    int
+	Select  string
+	Filter  string
+	OrderBy string
+	Search  string
 }
 
 type UserInfo struct {

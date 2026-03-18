@@ -12,6 +12,7 @@ var MicrosoftScopes = []string{
 	"https://graph.microsoft.com/.default",
 	"https://graph.microsoft.com/User.Read",
 	"https://graph.microsoft.com/Mail.Send",
+	"https://graph.microsoft.com/Mail.Read",
 }
 
 var cfg = msgraph.Config{

@@ -139,6 +139,50 @@ func (c *Client) execute(method string, path string, params interface{}, headers
 
 }
 
+// executeRaw makes a request and returns the raw response bytes without JSON parsing.
+// Used for endpoints that return binary content (e.g. attachment downloads).
+func (c *Client) executeRaw(method string, path string, headers Headers) ([]byte, error) {
+
+	endpoint := baseUrl + path
+
+	request, _ := http.NewRequest(method, endpoint, nil)
+
+	request.Header.Add("Authorization", "Bearer "+c.Token.AccessToken)
+
+	if headers != nil {
+		for key, value := range headers {
+			request.Header.Add(key, value)
+		}
+	}
+
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return nil, err
+	}
+
+	defer response.Body.Close()
+
+	data, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if NotIn(response.StatusCode, http.StatusOK, http.StatusCreated, http.StatusAccepted) {
+		if len(data) > 0 {
+			return nil, errors.New(string(data))
+		}
+		return nil, errors.New(response.Status)
+	}
+
+	return data, nil
+
+}
+
+// GetRaw executes GET requests and returns raw bytes
+func (c *Client) GetRaw(path string, headers Headers) ([]byte, error) {
+	return c.executeRaw(http.MethodGet, path, headers)
+}
+
 // Get executes GET requests
 func (c *Client) Get(path string, params interface{}, headers Headers, model interface{}) error {
 	return c.execute(http.MethodGet, path, params, headers, model)
