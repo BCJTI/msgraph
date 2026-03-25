@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"runtime"
 	"testing"
@@ -14,10 +15,10 @@ import (
 )
 
 var authCfg = msgraph.Config{
-	ClientID:     "",
-	ClientSecret: "",
-	RedirectURI:  "http://localhost:4201/callback/microsoft",
-	//TenantID:     "dbca83ec-2d34-4865-b5a8-3468cb882dd5",
+	ClientID:     os.Getenv("OAUTH_CLIENT_ID"),
+	ClientSecret: os.Getenv("OAUTH_CLIENT_SECRET"),
+	RedirectURI:  os.Getenv("OAUTH_REDIRECT_URI"),
+	// TenantID is optional; when empty it defaults to "common" (multi-tenant).
 	Scopes: []string{
 		"User.Read",
 		"Mail.Send",
@@ -46,6 +47,10 @@ func openBrowser(url string) error {
 //
 // Run with: go test -v -run TestGenerateAccessToken -timeout 120s
 func TestGenerateAccessToken(t *testing.T) {
+	if authCfg.ClientID == "" || authCfg.ClientSecret == "" || authCfg.RedirectURI == "" {
+		t.Skip("missing OAuth environment variables; set OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET, and OAUTH_REDIRECT_URI")
+	}
+
 	sdk := msgraph.NewClient(authCfg)
 
 	authURL := sdk.GetAuthorizationURL()

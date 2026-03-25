@@ -39,7 +39,7 @@ func TestListEventsByCalendar(t *testing.T) {
 		Top: 5,
 	}
 
-	result, err := sdk.ListEventsByCalendar("AAMkAGU4NGFiN2VkLWU4YTctNDAxMC1hYmFlLTM4ZGFiZDVmZTM5MgBGAAAAAABK5lii2cv5Sq6Iy9Bqgr3ZBwBfmQBSamUrTaPpdptDpKcmAAAAAAEGAABfmQBSamUrTaPpdptDpKcmAAAAAAEGAAA=", opts)
+	result, err := sdk.ListEventsByCalendar("AAMkAGU4NGFiN2VkLWU4YTctNDAxMC1hYmFlLTM4ZGFiZDVmZTM5MgBGAAAAAABK5lii2cv5Sq6Iy9Bqgr3ZBwBfmQBSamUrTaPpdptDpKcmAAAAAAENAABfmQBSamUrTaPpdptDpKcmAACGAoGIAAA=", opts)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -48,7 +48,7 @@ func TestListEventsByCalendar(t *testing.T) {
 func TestGetEvent(t *testing.T) {
 	sdk := newTestClient()
 
-	event, err := sdk.GetEvent("AAMkAGU4NGFiN2VkLWU4YTctNDAxMC1hYmFlLTM4ZGFiZDVmZTM5MgBGAAAAAABK5lii2cv5Sq6Iy9Bqgr3ZBwBfmQBSamUrTaPpdptDpKcmAAAAAAENAABfmQBSamUrTaPpdptDpKcmAACBRR6IAAA=")
+	event, err := sdk.GetEvent("AAMkAGU4NGFiN2VkLWU4YTctNDAxMC1hYmFlLTM4ZGFiZDVmZTM5MgBGAAAAAABK5lii2cv5Sq6Iy9Bqgr3ZBwBfmQBSamUrTaPpdptDpKcmAAAAAAENAABfmQBSamUrTaPpdptDpKcmAACGAoGKAAA=")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, event)
@@ -99,7 +99,7 @@ func TestUpdateEvent(t *testing.T) {
 		Subject: "Updated Meeting Subject",
 	}
 
-	result, err := sdk.UpdateEvent("AAMkAGU4NGFiN2VkLWU4YTctNDAxMC1hYmFlLTM4ZGFiZDVmZTM5MgBGAAAAAABK5lii2cv5Sq6Iy9Bqgr3ZBwBfmQBSamUrTaPpdptDpKcmAAAAAAENAABfmQBSamUrTaPpdptDpKcmAACBRR6IAAA=", update)
+	result, err := sdk.UpdateEvent("AAMkAGU4NGFiN2VkLWU4YTctNDAxMC1hYmFlLTM4ZGFiZDVmZTM5MgBGAAAAAABK5lii2cv5Sq6Iy9Bqgr3ZBwBfmQBSamUrTaPpdptDpKcmAAAAAAENAABfmQBSamUrTaPpdptDpKcmAACGAoGJAAA=", update)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -109,7 +109,7 @@ func TestUpdateEvent(t *testing.T) {
 func TestDeleteEvent(t *testing.T) {
 	sdk := newTestClient()
 
-	err := sdk.DeleteEvent("AAMkAGU4NGFiN2VkLWU4YTctNDAxMC1hYmFlLTM4ZGFiZDVmZTM5MgBGAAAAAABK5lii2cv5Sq6Iy9Bqgr3ZBwBfmQBSamUrTaPpdptDpKcmAAAAAAENAABfmQBSamUrTaPpdptDpKcmAACBRR6IAAA=")
+	err := sdk.DeleteEvent("AAMkAGU4NGFiN2VkLWU4YTctNDAxMC1hYmFlLTM4ZGFiZDVmZTM5MgBGAAAAAABK5lii2cv5Sq6Iy9Bqgr3ZBwBfmQBSamUrTaPpdptDpKcmAAAAAAENAABfmQBSamUrTaPpdptDpKcmAACGAoGJAAA=")
 
 	assert.NoError(t, err)
 }
