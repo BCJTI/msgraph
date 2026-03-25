@@ -40,16 +40,6 @@ func (opts *ListEventsOptions) toQueryParams() Params {
 // Supports OData query parameters via ListEventsOptions.
 // GET /me/events
 func (c *Client) ListEvents(opts *ListEventsOptions) (*EventListResponse, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return nil, err
-		}
-	}
-
 	result := &EventListResponse{}
 
 	if err := c.Get("/me/events", opts.toQueryParams(), nil, result); err != nil {
@@ -62,16 +52,6 @@ func (c *Client) ListEvents(opts *ListEventsOptions) (*EventListResponse, error)
 // ListEventsByCalendar retrieves events from a specific calendar.
 // GET /me/calendars/{calendarID}/events
 func (c *Client) ListEventsByCalendar(calendarID string, opts *ListEventsOptions) (*EventListResponse, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return nil, err
-		}
-	}
-
 	result := &EventListResponse{}
 	path := fmt.Sprintf("/me/calendars/%s/events", calendarID)
 
@@ -85,16 +65,6 @@ func (c *Client) ListEventsByCalendar(calendarID string, opts *ListEventsOptions
 // ListEventsByNextLink follows an @odata.nextLink URL for pagination.
 // The nextLink is an absolute URL returned by a previous ListEvents call.
 func (c *Client) ListEventsByNextLink(nextLink string) (*EventListResponse, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return nil, err
-		}
-	}
-
 	path := strings.TrimPrefix(nextLink, baseUrl)
 	result := &EventListResponse{}
 
@@ -108,16 +78,6 @@ func (c *Client) ListEventsByNextLink(nextLink string) (*EventListResponse, erro
 // GetEvent retrieves a single event by its ID.
 // GET /me/events/{eventID}
 func (c *Client) GetEvent(eventID string) (*Event, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return nil, err
-		}
-	}
-
 	event := &Event{}
 	path := fmt.Sprintf("/me/events/%s", eventID)
 
@@ -131,16 +91,6 @@ func (c *Client) GetEvent(eventID string) (*Event, error) {
 // CreateEvent creates a new event in the signed-in user's default calendar.
 // POST /me/events
 func (c *Client) CreateEvent(event *Event) (*Event, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return nil, err
-		}
-	}
-
 	result := &Event{}
 
 	if err := c.Post("/me/events", event, nil, result); err != nil {
@@ -153,16 +103,6 @@ func (c *Client) CreateEvent(event *Event) (*Event, error) {
 // CreateEventInCalendar creates a new event in a specific calendar.
 // POST /me/calendars/{calendarID}/events
 func (c *Client) CreateEventInCalendar(calendarID string, event *Event) (*Event, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return nil, err
-		}
-	}
-
 	result := &Event{}
 	path := fmt.Sprintf("/me/calendars/%s/events", calendarID)
 
@@ -177,16 +117,6 @@ func (c *Client) CreateEventInCalendar(calendarID string, event *Event) (*Event,
 // Only the fields set in the event parameter are updated (PATCH semantics).
 // PATCH /me/events/{eventID}
 func (c *Client) UpdateEvent(eventID string, event *Event) (*Event, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return nil, err
-		}
-	}
-
 	result := &Event{}
 	path := fmt.Sprintf("/me/events/%s", eventID)
 
@@ -202,16 +132,6 @@ func (c *Client) UpdateEvent(eventID string, event *Event) (*Event, error) {
 // sends a cancellation message to attendees.
 // DELETE /me/events/{eventID}
 func (c *Client) DeleteEvent(eventID string) error {
-	if c.Token == nil {
-		return fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return err
-		}
-	}
-
 	path := fmt.Sprintf("/me/events/%s", eventID)
 
 	return c.Delete(path, nil, nil, &Http202{})

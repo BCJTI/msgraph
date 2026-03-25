@@ -20,9 +20,13 @@ type Headers map[string]string
 // Make request and return the response
 func (c *Client) execute(method string, path string, params interface{}, headers Headers, model interface{}) error {
 
+	token, err := c.accessToken()
+	if err != nil {
+		return err
+	}
+
 	var request *http.Request
 
-	// init vars
 	endpoint := baseUrl + path
 
 	// check for params
@@ -75,10 +79,7 @@ func (c *Client) execute(method string, path string, params interface{}, headers
 
 	}
 
-	// set basic auth
-
-	request.Header.Add("Authorization", "Bearer "+c.Token.AccessToken)
-	// define json content type
+	request.Header.Add("Authorization", "Bearer "+token)
 	request.Header.Add("Accept", "application/json")
 	request.Header.Add("Content-type", "application/json")
 
@@ -164,11 +165,16 @@ func (c *Client) execute(method string, path string, params interface{}, headers
 // Used for endpoints that return binary content (e.g. attachment downloads).
 func (c *Client) executeRaw(method string, path string, headers Headers) ([]byte, error) {
 
+	token, err := c.accessToken()
+	if err != nil {
+		return nil, err
+	}
+
 	endpoint := baseUrl + path
 
 	request, _ := http.NewRequest(method, endpoint, nil)
 
-	request.Header.Add("Authorization", "Bearer "+c.Token.AccessToken)
+	request.Header.Add("Authorization", "Bearer "+token)
 
 	if headers != nil {
 		for key, value := range headers {

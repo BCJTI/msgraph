@@ -1,27 +1,12 @@
 package msgraph
 
-import (
-	"fmt"
-)
-
-// type to get the response from the API SendEmail that just returns a 202 status code or an error
+// Http202 captures the response from API calls that return a 202 status code.
 type Http202 struct {
 	Content string `json:"content"`
 }
 
 // SendEmail sends an email using Microsoft Graph API
 func (c *Client) SendEmail(subject, body string, contentType ContentType, saveSentItems bool, toRecipients, ccRecipients, bccRecipients []string, attachs []Attachment) error {
-	if c.Token == nil {
-		return fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		err := c.OAuthRefreshToken()
-		if err != nil {
-			return err
-		}
-	}
-
 	emailData := SendMailRequest{
 		Message: Message{
 			Subject: subject,

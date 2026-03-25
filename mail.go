@@ -43,16 +43,6 @@ func (opts *ListMessagesOptions) toQueryParams() Params {
 // Supports OData query parameters via ListMessagesOptions.
 // GET /me/messages
 func (c *Client) ListMessages(opts *ListMessagesOptions) (*MessageListResponse, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return nil, err
-		}
-	}
-
 	result := &MessageListResponse{}
 
 	if err := c.Get("/me/messages", opts.toQueryParams(), nil, result); err != nil {
@@ -65,16 +55,6 @@ func (c *Client) ListMessages(opts *ListMessagesOptions) (*MessageListResponse, 
 // ListMessagesByFolder retrieves messages from a specific mail folder.
 // GET /me/mailFolders/{folderID}/messages
 func (c *Client) ListMessagesByFolder(folderID string, opts *ListMessagesOptions) (*MessageListResponse, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return nil, err
-		}
-	}
-
 	result := &MessageListResponse{}
 	path := fmt.Sprintf("/me/mailFolders/%s/messages", folderID)
 
@@ -88,16 +68,6 @@ func (c *Client) ListMessagesByFolder(folderID string, opts *ListMessagesOptions
 // ListMessagesByNextLink follows an @odata.nextLink URL for pagination.
 // The nextLink is an absolute URL returned by a previous ListMessages call.
 func (c *Client) ListMessagesByNextLink(nextLink string) (*MessageListResponse, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return nil, err
-		}
-	}
-
 	path := strings.TrimPrefix(nextLink, baseUrl)
 	result := &MessageListResponse{}
 
@@ -111,16 +81,6 @@ func (c *Client) ListMessagesByNextLink(nextLink string) (*MessageListResponse, 
 // GetMessage retrieves a single message by its ID.
 // GET /me/messages/{messageID}
 func (c *Client) GetMessage(messageID string) (*Message, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return nil, err
-		}
-	}
-
 	msg := &Message{}
 	path := fmt.Sprintf("/me/messages/%s", messageID)
 
@@ -134,16 +94,6 @@ func (c *Client) GetMessage(messageID string) (*Message, error) {
 // ListAttachments retrieves all attachments for a given message.
 // GET /me/messages/{messageID}/attachments
 func (c *Client) ListAttachments(messageID string) (*AttachmentListResponse, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return nil, err
-		}
-	}
-
 	result := &AttachmentListResponse{}
 	path := fmt.Sprintf("/me/messages/%s/attachments", messageID)
 
@@ -157,16 +107,6 @@ func (c *Client) ListAttachments(messageID string) (*AttachmentListResponse, err
 // GetAttachment retrieves a single attachment's metadata and content (base64-encoded).
 // GET /me/messages/{messageID}/attachments/{attachmentID}
 func (c *Client) GetAttachment(messageID, attachmentID string) (*FileAttachment, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return nil, err
-		}
-	}
-
 	attachment := &FileAttachment{}
 	path := fmt.Sprintf("/me/messages/%s/attachments/%s", messageID, attachmentID)
 
@@ -180,16 +120,6 @@ func (c *Client) GetAttachment(messageID, attachmentID string) (*FileAttachment,
 // DownloadAttachment retrieves the raw binary content of an attachment.
 // GET /me/messages/{messageID}/attachments/{attachmentID}/$value
 func (c *Client) DownloadAttachment(messageID, attachmentID string) ([]byte, error) {
-	if c.Token == nil {
-		return nil, fmt.Errorf("missing access token. Please obtain one first")
-	}
-
-	if !c.Token.Valid() {
-		if err := c.OAuthRefreshToken(); err != nil {
-			return nil, err
-		}
-	}
-
 	path := fmt.Sprintf("/me/messages/%s/attachments/%s/$value", messageID, attachmentID)
 
 	data, err := c.GetRaw(path, nil)
