@@ -143,7 +143,7 @@ func (c *Client) execute(method string, path string, params interface{}, headers
 	}
 
 	// verify status code
-	if NotIn(response.StatusCode, http.StatusOK, http.StatusCreated, http.StatusAccepted) {
+	if NotIn(response.StatusCode, http.StatusOK, http.StatusCreated, http.StatusAccepted, http.StatusNoContent) {
 
 		// return body as error message
 		if len(data) > 0 {

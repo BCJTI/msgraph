@@ -22,6 +22,7 @@ var authCfg = msgraph.Config{
 		"User.Read",
 		"Mail.Send",
 		"Mail.Read",
+		"Calendars.ReadWrite",
 		"offline_access",
 	},
 }
