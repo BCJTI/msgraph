@@ -1132,3 +1132,111 @@ func TestExchangeCodeForTokensStoresAndDelivers(t *testing.T) {
 		t.Errorf("graph saw tokens %v, want [exchanged-access]", got)
 	}
 }
+
+// TestAmbiguousUnauthorizedWithoutRefreshTokenStaysRetryable covers the
+// backward-compatible configuration where a caller assigns an opaque access
+// token with no refresh token and no expiry. Graph answers 401 with a body that
+// explains nothing, and the token cannot be renewed — but "could not renew" is
+// not evidence that a human must act, so the caller must still see the ambiguous
+// 401 as retryable rather than a permanent re-authorization verdict.
+func TestAmbiguousUnauthorizedWithoutRefreshTokenStaysRetryable(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "empty body", body: ""},
+		{name: "proxy html body", body: "<html><body>401 Unauthorized</body></html>"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tokens := newTokenServer(t, nil)
+			graph := newGraphServer(t, func(call int, token string) (int, string) {
+				return http.StatusUnauthorized, tc.body
+			})
+
+			client := newTestClient(tokens.URL, graph.URL, &oauth2.Token{
+				AccessToken: "opaque-access-token",
+				TokenType:   "Bearer",
+			})
+
+			var result struct{}
+
+			err := client.Get("/me/messages", nil, nil, &result)
+			if err == nil {
+				t.Fatal("Get: expected an error, got nil")
+			}
+
+			var authErr *AuthError
+			if !errors.As(err, &authErr) {
+				t.Fatalf("error %v (%T) is not an *AuthError", err, err)
+			}
+			if authErr.Kind != AuthErrorKindUnknown {
+				t.Errorf("kind = %q, want %q for a 401 that names no reason", authErr.Kind, AuthErrorKindUnknown)
+			}
+			if authErr.HTTPStatus != http.StatusUnauthorized {
+				t.Errorf("HTTPStatus = %d, want %d: the caller must see what actually happened",
+					authErr.HTTPStatus, http.StatusUnauthorized)
+			}
+			if !authErr.Retryable() {
+				t.Error("Retryable = false, want true")
+			}
+			if IsPermanentAuthError(err) {
+				t.Error("IsPermanentAuthError = true: an unexplained 401 must not be escalated as a config error")
+			}
+			if IsReauthRequired(err) {
+				t.Error("IsReauthRequired = true: nothing in the 401 says the grant is gone")
+			}
+
+			// One request, well inside maxAuthAttempts: with no refresh token the
+			// retry has no new token to send, so the call stops instead of looping.
+			if got := graph.calls.Load(); got != 1 {
+				t.Errorf("graph calls = %d, want 1: the retry cannot go out without a token", got)
+			}
+			if got := tokens.calls.Load(); got != 0 {
+				t.Errorf("token endpoint calls = %d, want 0: there is nothing to refresh with", got)
+			}
+		})
+	}
+}
+
+// TestUnauthorizedTokenProblemWithoutRefreshTokenIsPermanent is the other half of
+// the same path: when the 401 body does name a token problem, a client with no
+// refresh token must still get the permanent verdict, because that 401 explains
+// itself and no retry recovers from it.
+func TestUnauthorizedTokenProblemWithoutRefreshTokenIsPermanent(t *testing.T) {
+	tokens := newTokenServer(t, nil)
+	graph := newGraphServer(t, func(call int, token string) (int, string) {
+		return http.StatusUnauthorized, unauthorizedBody
+	})
+
+	client := newTestClient(tokens.URL, graph.URL, &oauth2.Token{
+		AccessToken: "opaque-access-token",
+		TokenType:   "Bearer",
+	})
+
+	var result struct{}
+
+	err := client.Get("/me/messages", nil, nil, &result)
+	if err == nil {
+		t.Fatal("Get: expected an error, got nil")
+	}
+
+	var authErr *AuthError
+	if !errors.As(err, &authErr) {
+		t.Fatalf("error %v (%T) is not an *AuthError", err, err)
+	}
+	if authErr.Kind != AuthErrorKindReauthRequired {
+		t.Errorf("kind = %q, want %q", authErr.Kind, AuthErrorKindReauthRequired)
+	}
+	if authErr.Code != "InvalidAuthenticationToken" {
+		t.Errorf("code = %q, want InvalidAuthenticationToken", authErr.Code)
+	}
+	if !IsPermanentAuthError(err) {
+		t.Error("IsPermanentAuthError = false, want true: the caller must stop retrying")
+	}
+
+	if got := graph.calls.Load(); got != 1 {
+		t.Errorf("graph calls = %d, want 1: the retry cannot go out without a token", got)
+	}
+}

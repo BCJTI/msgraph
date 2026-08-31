@@ -18,6 +18,11 @@ anything when a token ages out:
 - If Graph answers `401` anyway — a token revoked early, or one whose recorded
   expiry was wrong — the token is re-acquired and the call is sent once more.
   Exactly once: a second `401` is reported, not retried.
+- If that retry cannot go out because the token carries no refresh token — the
+  backward-compatible case of an opaque access token assigned by the caller — the
+  `401` that was actually observed is classified and returned. A `401` that names
+  nothing therefore stays retryable instead of being reported as a permanent
+  "re-authorize" verdict just because renewal was impossible.
 - Concurrent callers hitting an expired token produce a single token request.
   Entra ID rotates the refresh token on every use, so a stampede would invalidate
   the ones in flight.

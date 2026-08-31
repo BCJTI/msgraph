@@ -144,14 +144,27 @@ func (c *Client) build(ctx context.Context, req request, token string) (*http.Re
 // which is how an expired client secret reaches the caller as something it can
 // tell apart from a transient fault. A 401 that survives the retry comes back as
 // an *AuthError too, rather than as an opaque response body.
+//
+// The one token failure not reported as itself is a token that cannot be renewed
+// for lack of a refresh token: it says nothing about why Graph answered 401, so
+// the observed 401 is classified and returned instead. Otherwise a client holding
+// only an opaque access token would see every ambiguous 401 — an empty body, a
+// proxy's HTML page — turned into a permanent "re-authorize" verdict.
 func (c *Client) do(ctx context.Context, req request) (int, []byte, error) {
 
 	staleToken := ""
+
+	// The 401 that triggered the retry, kept so it can still be reported if the
+	// retry never gets off the ground.
+	unauthorizedStatus, unauthorizedBody := 0, []byte(nil)
 
 	for attempt := 1; ; attempt++ {
 
 		token, err := c.ensureToken(ctx, tokenRequest{staleAccessToken: staleToken})
 		if err != nil {
+			if staleToken != "" && errors.Is(err, errNoRefreshToken) {
+				return unauthorizedStatus, unauthorizedBody, classifyUnauthorized(unauthorizedStatus, unauthorizedBody)
+			}
 			return 0, nil, err
 		}
 
@@ -189,6 +202,7 @@ func (c *Client) do(ctx context.Context, req request) (int, []byte, error) {
 		}
 
 		staleToken = token
+		unauthorizedStatus, unauthorizedBody = status, data
 
 	}
 

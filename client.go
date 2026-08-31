@@ -2,6 +2,7 @@ package msgraph
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -160,6 +161,14 @@ type tokenRequest struct {
 	force bool
 }
 
+// errNoRefreshToken marks the one token-acquisition failure that says nothing
+// about the credentials themselves: the cached token simply cannot be renewed,
+// because it carries no refresh token. A caller that already has a real
+// authentication failure in hand — a Microsoft Graph 401 — reports that instead
+// of this stand-in, so an ambiguous 401 is not escalated to "a human must act"
+// purely because renewal was impossible.
+var errNoRefreshToken = errors.New("msgraph: no refresh token available")
+
 // ensureToken returns a usable access token, refreshing it when needed.
 //
 // The lock is held across the refresh on purpose: it collapses a burst of
@@ -187,6 +196,7 @@ func (c *Client) ensureToken(ctx context.Context, req tokenRequest) (string, err
 		return "", &AuthError{
 			Kind:        AuthErrorKindReauthRequired,
 			Description: "the access token needs renewing and no refresh token is available",
+			err:         errNoRefreshToken,
 		}
 	}
 
