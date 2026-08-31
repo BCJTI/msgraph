@@ -61,8 +61,19 @@ type Client struct {
 	Token *oauth2.Token
 	// Debug logs HTTP requests and responses to stdout. Secrets are redacted.
 	Debug bool
-	// HTTPClient is used for Microsoft Graph calls. When nil, http.DefaultClient
-	// is used. Set one with a timeout to bound how long a Graph call may hang.
+	// HTTPClient is used for both Microsoft Graph calls and the OAuth2 token
+	// endpoint (the refresh and the authorization code exchange). When set it is
+	// used as given for both, its timeout respected and never overridden.
+	//
+	// When nil the two paths differ on purpose: Graph calls fall back to
+	// http.DefaultClient and are not bounded by a timeout, while token endpoint
+	// calls get a client carrying defaultTokenHTTPTimeout. The token request runs
+	// with the Client's lock held, so an endpoint that accepts the connection and
+	// never answers would stall every goroutine sharing the Client, whereas a
+	// hanging Graph call only blocks its own caller.
+	//
+	// Supplying an HTTPClient therefore replaces that default guard as well: set a
+	// timeout on it, or the token endpoint is unbounded again on the locked path.
 	HTTPClient *http.Client
 	// OnTokenRefresh, when set, is called with a copy of the new token every time
 	// the Client refreshes it. Callers that persist the refresh token should use

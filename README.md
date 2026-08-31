@@ -19,8 +19,17 @@ anything when a token ages out:
 - Concurrent callers hitting an expired token produce a single token request.
   Entra ID rotates the refresh token on every use, so a stampede would invalidate
   the ones in flight.
-- Set `HTTPClient` with a timeout to bound both the Graph call and the token
-  refresh; without one they use `http.DefaultClient`, which never times out.
+- With no `HTTPClient` set the two paths are deliberately bounded differently:
+  Graph calls use `http.DefaultClient` and are **not** bounded by a timeout, while
+  the OAuth2 token-endpoint calls — the refresh and the authorization code
+  exchange — use a client carrying a 30s default timeout. The token request runs
+  with the Client's lock held, so a token endpoint that accepts the connection and
+  never answers would wedge every goroutine sharing the Client; a hanging Graph
+  call blocks only its own caller.
+- Set `HTTPClient` and it is used as-is for both paths, its timeout respected and
+  never overridden. Because it then also serves the token endpoint, it replaces
+  that 30s default guard: give it a timeout, or a token endpoint that never
+  answers is unbounded again on the path that holds the lock.
 
 Set `OnTokenRefresh` to persist the rotated refresh token, so it survives a
 process restart:
