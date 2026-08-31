@@ -59,10 +59,24 @@ type Client struct {
 	// OnTokenRefresh, when set, is called with a copy of the new token every time
 	// the Client refreshes it. Callers that persist the refresh token should use
 	// this to store the rotated one, so the token survives a process restart.
-	// It is called without the Client's lock held.
+	//
+	// It is called without the Client's lock held, so a callback may use
+	// CurrentToken or SetToken. Deliveries are serialized and ordered: a delivery
+	// overtaken by a newer token is dropped rather than persisted, so a callback
+	// never stores a refresh token Entra ID has already rotated away.
 	OnTokenRefresh func(*oauth2.Token)
 	// baseURL overrides the Microsoft Graph base URL. Used by tests.
 	baseURL string
+
+	// refreshSeq numbers every token the Client stores, so a delivery that lost the
+	// race to a newer one can be recognized as stale. Guarded by mu.
+	refreshSeq uint64
+
+	// callbackMu serializes OnTokenRefresh deliveries and guards deliveredSeq, the
+	// newest token already handed to the callback. It is deliberately not mu, which
+	// a callback calling CurrentToken or SetToken would deadlock on.
+	callbackMu   sync.Mutex
+	deliveredSeq uint64
 }
 
 // NewClient creates a new Client instance.
@@ -154,20 +168,53 @@ func (c *Client) ensureToken(ctx context.Context, req tokenRequest) (string, err
 		}
 	}
 
-	newToken, err := c.refreshLocked(ctx)
+	newToken, seq, err := c.refreshLocked(ctx)
 	if err != nil {
 		c.mu.Unlock()
 		return "", err
 	}
 
+	accessToken := newToken.AccessToken
+	delivery := cloneToken(newToken)
 	callback := c.OnTokenRefresh
 	c.mu.Unlock()
 
-	if callback != nil {
-		callback(cloneToken(newToken))
+	c.deliverTokenRefresh(callback, delivery, seq)
+
+	return accessToken, nil
+}
+
+// storeTokenLocked records a newly acquired token and returns its sequence
+// number, which orders the OnTokenRefresh delivery that follows.
+// The caller must hold c.mu.
+func (c *Client) storeTokenLocked(token *oauth2.Token) uint64 {
+	c.Token = token
+	c.refreshSeq++
+
+	return c.refreshSeq
+}
+
+// deliverTokenRefresh hands a newly acquired token to the OnTokenRefresh
+// callback, one delivery at a time and never out of order.
+//
+// Two goroutines can leave ensureToken with tokens acquired in one order and
+// reach the callback in the other; delivering the older one last would have the
+// caller persist a refresh token Entra ID already invalidated, so it is dropped.
+func (c *Client) deliverTokenRefresh(callback func(*oauth2.Token), token *oauth2.Token, seq uint64) {
+	if callback == nil {
+		return
 	}
 
-	return newToken.AccessToken, nil
+	c.callbackMu.Lock()
+	defer c.callbackMu.Unlock()
+
+	if seq <= c.deliveredSeq {
+		return
+	}
+
+	c.deliveredSeq = seq
+
+	callback(token)
 }
 
 // tokenUsable reports whether a cached token can be used as-is. Callers read it
@@ -194,9 +241,10 @@ func tokenUsable(token *oauth2.Token, req tokenRequest) bool {
 	return time.Now().Add(tokenRefreshWindow).Before(token.Expiry)
 }
 
-// refreshLocked exchanges the refresh token for a new access token and stores it.
+// refreshLocked exchanges the refresh token for a new access token and stores it,
+// returning the token and the sequence number that orders its delivery.
 // The caller must hold c.mu.
-func (c *Client) refreshLocked(ctx context.Context) (*oauth2.Token, error) {
+func (c *Client) refreshLocked(ctx context.Context) (*oauth2.Token, uint64, error) {
 	if c.Debug {
 		fmt.Printf("[DEBUG] Refreshing access token\n")
 		fmt.Printf("[DEBUG] TokenURL: %s\n", c.config.Endpoint.TokenURL)
@@ -208,7 +256,7 @@ func (c *Client) refreshLocked(ctx context.Context) (*oauth2.Token, error) {
 	// A token source seeded with only the refresh token always performs the
 	// refresh; passing the cached token would make oauth2 hand it back unchanged
 	// whenever it still looks valid, which defeats the forced-refresh path.
-	source := c.config.TokenSource(ctx, &oauth2.Token{RefreshToken: c.Token.RefreshToken})
+	source := c.config.TokenSource(c.oauthContext(ctx), &oauth2.Token{RefreshToken: c.Token.RefreshToken})
 
 	newToken, err := source.Token()
 	if err != nil {
@@ -216,33 +264,38 @@ func (c *Client) refreshLocked(ctx context.Context) (*oauth2.Token, error) {
 		if c.Debug {
 			fmt.Printf("[DEBUG] Refresh failed: %v\n", authErr)
 		}
-		return nil, authErr
+		return nil, 0, authErr
 	}
 
 	if c.Debug {
 		fmt.Printf("[DEBUG] New token obtained, expires: %s\n", newToken.Expiry)
 	}
 
-	c.Token = newToken
+	return newToken, c.storeTokenLocked(newToken), nil
+}
 
-	return newToken, nil
+// oauthContext makes the oauth2 package talk to the token endpoint through this
+// Client's HTTP client. Without it oauth2 falls back to http.DefaultClient, which
+// has no timeout — and the refresh runs with c.mu held, so an endpoint that never
+// answers would stall every other caller indefinitely.
+func (c *Client) oauthContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, oauth2.HTTPClient, c.httpClient())
 }
 
 // ExchangeCodeForTokens exchanges authorization code for access and refresh tokens
 func (c *Client) ExchangeCodeForTokens(ctx context.Context, code string) error {
-	token, err := c.config.Exchange(ctx, code)
+	token, err := c.config.Exchange(c.oauthContext(ctx), code)
 	if err != nil {
 		return classifyTokenError(err)
 	}
 
 	c.mu.Lock()
-	c.Token = token
+	seq := c.storeTokenLocked(token)
+	delivery := cloneToken(token)
 	callback := c.OnTokenRefresh
 	c.mu.Unlock()
 
-	if callback != nil {
-		callback(cloneToken(token))
-	}
+	c.deliverTokenRefresh(callback, delivery, seq)
 
 	return nil
 }

@@ -315,14 +315,34 @@ type graphErrorBody struct {
 	} `json:"error"`
 }
 
+// graphTokenErrorCodes maps the Microsoft Graph error codes that explicitly name
+// a token or grant problem to the action they require. A 401 carrying one of
+// these survived a fresh token, so the grant itself is no longer accepted.
+// Keys are lowercased, since Graph is not consistent about casing.
+var graphTokenErrorCodes = map[string]AuthErrorKind{
+	"invalidauthenticationtoken": AuthErrorKindReauthRequired,
+	"expiredauthenticationtoken": AuthErrorKindReauthRequired,
+	"compacttoken":               AuthErrorKindReauthRequired,
+	"invalidtoken":               AuthErrorKindReauthRequired,
+	"tokennotfound":              AuthErrorKindReauthRequired,
+	"invalidgrant":               AuthErrorKindReauthRequired,
+	"invalid_grant":              AuthErrorKindReauthRequired,
+}
+
 // classifyUnauthorized turns a Microsoft Graph 401 that survived a token
-// refresh into a classified *AuthError. A 401 the SDK could not fix by
-// re-acquiring the token means the grant itself is no longer accepted.
+// refresh into a classified *AuthError.
+//
+// Only a body that names the problem is escalated as permanent: a recognized
+// AADSTS code, or a Graph error code that says the token or the grant is the
+// reason. A 401 that names nothing — an empty body, a proxy's HTML page, an
+// error code the SDK does not know — stays AuthErrorKindUnknown and therefore
+// retryable, so an ambiguous failure is never mistaken for the expired client
+// secret only a human can fix.
 func classifyUnauthorized(status int, body []byte) *AuthError {
 	text := strings.TrimSpace(string(body))
 
 	authErr := &AuthError{
-		Kind:        AuthErrorKindReauthRequired,
+		Kind:        AuthErrorKindUnknown,
 		HTTPStatus:  status,
 		AADSTSCode:  aadstsPattern.FindString(text),
 		Description: truncate(text, maxDescriptionLen),
@@ -339,6 +359,11 @@ func classifyUnauthorized(status int, body []byte) *AuthError {
 	// An expired client secret can surface on the Graph side too, when the token
 	// was minted by a broker that revalidates the app credentials.
 	if kind, ok := aadstsKinds[authErr.AADSTSCode]; ok {
+		authErr.Kind = kind
+		return authErr
+	}
+
+	if kind, ok := graphTokenErrorCodes[strings.ToLower(authErr.Code)]; ok {
 		authErr.Kind = kind
 	}
 

@@ -182,32 +182,51 @@ func TestPermanentAndTransientAreExclusive(t *testing.T) {
 
 func TestClassifyUnauthorized(t *testing.T) {
 	tests := []struct {
-		name     string
-		body     string
-		wantKind AuthErrorKind
-		wantCode string
+		name string
+		body string
+		// wantKind is the classification, and wantPermanent whether the caller must
+		// stop retrying. Only a body that names a token, grant or credential problem
+		// earns a permanent kind; anything else stays retryable.
+		wantKind      AuthErrorKind
+		wantCode      string
+		wantPermanent bool
 	}{
 		{
-			name:     "graph token rejection",
-			body:     `{"error":{"code":"InvalidAuthenticationToken","message":"Access token has expired."}}`,
-			wantKind: AuthErrorKindReauthRequired,
-			wantCode: "InvalidAuthenticationToken",
+			name:          "graph token rejection",
+			body:          `{"error":{"code":"InvalidAuthenticationToken","message":"Access token has expired."}}`,
+			wantKind:      AuthErrorKindReauthRequired,
+			wantCode:      "InvalidAuthenticationToken",
+			wantPermanent: true,
 		},
 		{
-			name:     "expired secret surfaced by graph",
-			body:     `{"error":{"code":"InvalidAuthenticationToken","message":"AADSTS7000222: The provided client secret keys are expired."}}`,
-			wantKind: AuthErrorKindClientSecretExpired,
-			wantCode: "InvalidAuthenticationToken",
+			name:          "expired token code",
+			body:          `{"error":{"code":"ExpiredAuthenticationToken","message":"Lifetime validation failed."}}`,
+			wantKind:      AuthErrorKindReauthRequired,
+			wantCode:      "ExpiredAuthenticationToken",
+			wantPermanent: true,
+		},
+		{
+			name:          "expired secret surfaced by graph",
+			body:          `{"error":{"code":"InvalidAuthenticationToken","message":"AADSTS7000222: The provided client secret keys are expired."}}`,
+			wantKind:      AuthErrorKindClientSecretExpired,
+			wantCode:      "InvalidAuthenticationToken",
+			wantPermanent: true,
+		},
+		{
+			name:     "unrecognized graph code names nothing",
+			body:     `{"error":{"code":"UnknownError","message":"Something went wrong."}}`,
+			wantKind: AuthErrorKindUnknown,
+			wantCode: "UnknownError",
 		},
 		{
 			name:     "non-JSON body",
 			body:     "Unauthorized",
-			wantKind: AuthErrorKindReauthRequired,
+			wantKind: AuthErrorKindUnknown,
 		},
 		{
 			name:     "empty body",
 			body:     "",
-			wantKind: AuthErrorKindReauthRequired,
+			wantKind: AuthErrorKindUnknown,
 		},
 	}
 
@@ -224,8 +243,11 @@ func TestClassifyUnauthorized(t *testing.T) {
 			if err.HTTPStatus != http.StatusUnauthorized {
 				t.Errorf("HTTPStatus = %d, want 401", err.HTTPStatus)
 			}
-			if !IsPermanentAuthError(err) {
-				t.Error("a 401 that survived a refresh must not be reported as retryable")
+			if got := IsPermanentAuthError(err); got != tc.wantPermanent {
+				t.Errorf("IsPermanentAuthError = %v, want %v: %v", got, tc.wantPermanent, err)
+			}
+			if got := IsClientSecretExpired(err); got != (tc.wantKind == AuthErrorKindClientSecretExpired) {
+				t.Errorf("IsClientSecretExpired = %v for %v", got, err)
 			}
 		})
 	}

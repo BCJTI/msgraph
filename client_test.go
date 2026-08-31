@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -723,5 +724,225 @@ func TestRedactHidesSecrets(t *testing.T) {
 	}
 	if got := redact(""); got != "<empty>" {
 		t.Errorf("redact(\"\") = %q, want <empty>", got)
+	}
+}
+
+// TestStaleTokenRefreshDeliveryIsDropped covers the ordering rule for
+// OnTokenRefresh: deliveries reach the callback newest-last, and one overtaken
+// by a newer token is dropped. Persisting it would leave the caller holding a
+// refresh token Entra ID already rotated away, which is unusable after a restart.
+func TestStaleTokenRefreshDeliveryIsDropped(t *testing.T) {
+	client := NewClient(Config{ClientID: "test-client"})
+
+	var delivered []string
+	callback := func(token *oauth2.Token) { delivered = append(delivered, token.RefreshToken) }
+
+	client.deliverTokenRefresh(callback, &oauth2.Token{RefreshToken: "refresh-2"}, 2)
+	// Refresh 1 finished first but lost the race to the callback: it is stale now.
+	client.deliverTokenRefresh(callback, &oauth2.Token{RefreshToken: "refresh-1"}, 1)
+	client.deliverTokenRefresh(callback, &oauth2.Token{RefreshToken: "refresh-3"}, 3)
+
+	want := []string{"refresh-2", "refresh-3"}
+	if len(delivered) != len(want) || delivered[0] != want[0] || delivered[1] != want[1] {
+		t.Errorf("delivered %v, want %v: the overtaken refresh-1 must be dropped", delivered, want)
+	}
+}
+
+// TestConcurrentRefreshesDeliverNewestTokenLast checks the same ordering rule
+// end to end, where the race it guards against actually happens.
+func TestConcurrentRefreshesDeliverNewestTokenLast(t *testing.T) {
+	tokens := newTokenServer(t, nil)
+	graph := newGraphServer(t, okGraph)
+
+	client := newTestClient(tokens.URL, graph.URL, &oauth2.Token{
+		AccessToken:  "expired",
+		RefreshToken: "refresh-0",
+		TokenType:    "Bearer",
+		Expiry:       time.Now().Add(-time.Hour),
+	})
+
+	var (
+		mu        sync.Mutex
+		delivered []*oauth2.Token
+	)
+
+	client.OnTokenRefresh = func(token *oauth2.Token) {
+		mu.Lock()
+		delivered = append(delivered, token)
+		mu.Unlock()
+	}
+
+	const callers = 12
+
+	var wg sync.WaitGroup
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := client.ForceRefreshToken(context.Background()); err != nil {
+				t.Errorf("ForceRefreshToken: unexpected error: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(delivered) == 0 {
+		t.Fatal("no token was delivered to OnTokenRefresh")
+	}
+
+	issue := func(token *oauth2.Token) int {
+		n, err := strconv.Atoi(strings.TrimPrefix(token.RefreshToken, "refresh-"))
+		if err != nil {
+			t.Fatalf("unexpected refresh token %q", token.RefreshToken)
+		}
+		return n
+	}
+
+	for i := 1; i < len(delivered); i++ {
+		if issue(delivered[i]) <= issue(delivered[i-1]) {
+			t.Fatalf("delivery %d carried %q after %q: a stale token reached the caller",
+				i, delivered[i].RefreshToken, delivered[i-1].RefreshToken)
+		}
+	}
+
+	last := delivered[len(delivered)-1].RefreshToken
+	if got := client.CurrentToken().RefreshToken; got != last {
+		t.Errorf("last delivered refresh token = %q, but the Client holds %q", last, got)
+	}
+}
+
+// TestAmbiguousUnauthorizedStaysRetryable covers a 401 whose body names no
+// reason at all. It must not be escalated as a credential problem needing a
+// human — but it must still be reported after the single retry, not looped.
+func TestAmbiguousUnauthorizedStaysRetryable(t *testing.T) {
+	tokens := newTokenServer(t, nil)
+	graph := newGraphServer(t, func(call int, token string) (int, string) {
+		return http.StatusUnauthorized, "<html>401 from a proxy</html>"
+	})
+
+	client := newTestClient(tokens.URL, graph.URL, &oauth2.Token{
+		AccessToken:  "still-good",
+		RefreshToken: "refresh-0",
+		TokenType:    "Bearer",
+		Expiry:       time.Now().Add(time.Hour),
+	})
+
+	var result struct{}
+
+	err := client.Get("/me/messages", nil, nil, &result)
+	if err == nil {
+		t.Fatal("Get: expected an error, got nil")
+	}
+
+	if got := graph.calls.Load(); got != 2 {
+		t.Errorf("graph calls = %d, want 2 (one retry, no loop)", got)
+	}
+
+	var authErr *AuthError
+	if !errors.As(err, &authErr) {
+		t.Fatalf("error %v (%T) is not an *AuthError", err, err)
+	}
+	if authErr.Kind != AuthErrorKindUnknown {
+		t.Errorf("kind = %q, want %q for a 401 that names no reason", authErr.Kind, AuthErrorKindUnknown)
+	}
+	if IsPermanentAuthError(err) {
+		t.Error("IsPermanentAuthError = true: an unexplained 401 must not be escalated as a config error")
+	}
+	if IsClientSecretExpired(err) {
+		t.Error("IsClientSecretExpired = true, want false")
+	}
+	if !authErr.Retryable() {
+		t.Error("Retryable = false, want true")
+	}
+}
+
+// TestRefreshUsesConfiguredHTTPClient makes sure the token refresh honours
+// Client.HTTPClient. The refresh runs with the Client's lock held, so a token
+// endpoint that never answers would otherwise stall every caller forever.
+func TestRefreshUsesConfiguredHTTPClient(t *testing.T) {
+	release := make(chan struct{})
+
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-release
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"access_token":"late","token_type":"Bearer","expires_in":3600}`)
+	}))
+	defer func() {
+		close(release)
+		slow.Close()
+	}()
+
+	client := newTestClient(slow.URL, slow.URL, &oauth2.Token{
+		AccessToken:  "expired",
+		RefreshToken: "refresh-0",
+		TokenType:    "Bearer",
+		Expiry:       time.Now().Add(-time.Hour),
+	})
+	client.HTTPClient = &http.Client{Timeout: 50 * time.Millisecond}
+
+	start := time.Now()
+	err := client.EnsureValidToken(context.Background())
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("EnsureValidToken: expected the client timeout to abort the refresh, got nil")
+	}
+	if elapsed > 2*time.Second {
+		t.Errorf("refresh took %s: Client.HTTPClient did not bound it", elapsed)
+	}
+	if !IsTransientAuthError(err) {
+		t.Errorf("IsTransientAuthError = false for %v, want a timeout reported as retryable", err)
+	}
+}
+
+// TestNextLinkFollowsClientEndpoint checks that an absolute @odata.nextLink is
+// resolved against the base URL the Client actually talks to.
+func TestNextLinkFollowsClientEndpoint(t *testing.T) {
+	var (
+		mu     sync.Mutex
+		seen   []string
+		server *httptest.Server
+	)
+
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seen = append(seen, r.URL.RequestURI())
+		mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"value":[]}`)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server.URL, server.URL, &oauth2.Token{
+		AccessToken:  "still-good",
+		RefreshToken: "refresh-0",
+		TokenType:    "Bearer",
+		Expiry:       time.Now().Add(time.Hour),
+	})
+
+	nextLink := server.URL + "/me/messages?%24skiptoken=abc"
+
+	if _, err := client.ListMessagesByNextLink(nextLink); err != nil {
+		t.Fatalf("ListMessagesByNextLink: unexpected error: %v", err)
+	}
+	if _, err := client.ListEventsByNextLink(server.URL + "/me/events?%24skiptoken=def"); err != nil {
+		t.Fatalf("ListEventsByNextLink: unexpected error: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	want := []string{"/me/messages?%24skiptoken=abc", "/me/events?%24skiptoken=def"}
+	if len(seen) != len(want) {
+		t.Fatalf("server saw %v, want %v", seen, want)
+	}
+	for i, uri := range want {
+		if seen[i] != uri {
+			t.Errorf("request %d hit %q, want %q", i, seen[i], uri)
+		}
 	}
 }

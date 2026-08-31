@@ -65,7 +65,7 @@ func (c *Client) ListEventsByCalendar(calendarID string, opts *ListEventsOptions
 // ListEventsByNextLink follows an @odata.nextLink URL for pagination.
 // The nextLink is an absolute URL returned by a previous ListEvents call.
 func (c *Client) ListEventsByNextLink(nextLink string) (*EventListResponse, error) {
-	path := strings.TrimPrefix(nextLink, baseUrl)
+	path := strings.TrimPrefix(nextLink, c.endpoint())
 	result := &EventListResponse{}
 
 	if err := c.Get(path, nil, nil, result); err != nil {
