@@ -1,41 +1,27 @@
 package tests
 
 import (
+	"os"
 	"testing"
 
 	"github.com/bcjti/msgraph"
-	"golang.org/x/oauth2"
 
 	"github.com/stretchr/testify/assert"
 )
 
-var MicrosoftScopes = []string{
-	"https://graph.microsoft.com/.default",
-	"https://graph.microsoft.com/User.Read",
-	"https://graph.microsoft.com/Mail.Send",
-	"https://graph.microsoft.com/Mail.Read",
-}
-
-var cfg = msgraph.Config{
-	ClientID:     "",
-	ClientSecret: "",
-	RedirectURI:  "",
-	Scopes:       MicrosoftScopes,
-}
-
 func TestSendEmail(t *testing.T) {
-	sdk := msgraph.NewClient(cfg)
+	sdk := newTestClient(t)
 
-	sdk.Token = &oauth2.Token{
-		RefreshToken: "",
-		TokenType:    "Bearer",
+	recipient := os.Getenv("OAUTH_TEST_RECIPIENT")
+	if recipient == "" {
+		t.Skip("missing OAUTH_TEST_RECIPIENT; set it to the address the test email should go to")
 	}
 
 	err := sdk.SendEmail("test email",
 		"Application has sucessfully sent an email",
 		msgraph.ContentTypeText,
 		false,
-		[]string{"jacocasa@gmail.com"},
+		[]string{recipient},
 		[]string{},
 		[]string{},
 		[]msgraph.Attachment{})
@@ -44,16 +30,10 @@ func TestSendEmail(t *testing.T) {
 }
 
 func TestUserInfo(t *testing.T) {
-	sdk := msgraph.NewClient(cfg)
-
-	sdk.Token = &oauth2.Token{
-		RefreshToken: "",
-		TokenType:    "Bearer",
-	}
+	sdk := newTestClient(t)
 
 	userInfo, err := sdk.GetUserInfo()
 
 	assert.NoError(t, err)
 	assert.NotNil(t, userInfo)
-
 }

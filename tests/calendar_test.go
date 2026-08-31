@@ -9,7 +9,7 @@ import (
 )
 
 func TestListEvents(t *testing.T) {
-	sdk := newTestClient()
+	sdk := newTestClient(t)
 
 	opts := &msgraph.ListEventsOptions{
 		Top:    10,
@@ -24,7 +24,7 @@ func TestListEvents(t *testing.T) {
 }
 
 func TestListEventsNilOpts(t *testing.T) {
-	sdk := newTestClient()
+	sdk := newTestClient(t)
 
 	result, err := sdk.ListEvents(nil)
 
@@ -33,7 +33,7 @@ func TestListEventsNilOpts(t *testing.T) {
 }
 
 func TestListEventsByCalendar(t *testing.T) {
-	sdk := newTestClient()
+	sdk := newTestClient(t)
 
 	opts := &msgraph.ListEventsOptions{
 		Top: 5,
@@ -46,7 +46,7 @@ func TestListEventsByCalendar(t *testing.T) {
 }
 
 func TestGetEvent(t *testing.T) {
-	sdk := newTestClient()
+	sdk := newTestClient(t)
 
 	event, err := sdk.GetEvent("AAMkAGU4NGFiN2VkLWU4YTctNDAxMC1hYmFlLTM4ZGFiZDVmZTM5MgBGAAAAAABK5lii2cv5Sq6Iy9Bqgr3ZBwBfmQBSamUrTaPpdptDpKcmAAAAAAENAABfmQBSamUrTaPpdptDpKcmAACGAoGKAAA=")
 
@@ -55,7 +55,7 @@ func TestGetEvent(t *testing.T) {
 }
 
 func TestCreateEvent(t *testing.T) {
-	sdk := newTestClient()
+	sdk := newTestClient(t)
 
 	event := &msgraph.Event{
 		Subject: "Test Meeting",
@@ -93,7 +93,7 @@ func TestCreateEvent(t *testing.T) {
 }
 
 func TestUpdateEvent(t *testing.T) {
-	sdk := newTestClient()
+	sdk := newTestClient(t)
 
 	update := &msgraph.Event{
 		Subject: "Updated Meeting Subject",
@@ -107,7 +107,7 @@ func TestUpdateEvent(t *testing.T) {
 }
 
 func TestDeleteEvent(t *testing.T) {
-	sdk := newTestClient()
+	sdk := newTestClient(t)
 
 	err := sdk.DeleteEvent("AAMkAGU4NGFiN2VkLWU4YTctNDAxMC1hYmFlLTM4ZGFiZDVmZTM5MgBGAAAAAABK5lii2cv5Sq6Iy9Bqgr3ZBwBfmQBSamUrTaPpdptDpKcmAAAAAAENAABfmQBSamUrTaPpdptDpKcmAACGAoGJAAA=")
 
