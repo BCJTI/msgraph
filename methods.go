@@ -254,22 +254,11 @@ func (c *Client) execute(method string, path string, params interface{}, headers
 	}
 
 	if len(data) > 0 {
-		// check for error message
-		msg := &ErrMessage{}
-		if err = json.Unmarshal(data, msg); err == nil && msg.ErrorMessage != "" {
-			return msg
-		}
-
-		if err != nil {
-			return err
-		}
-
 		if err = json.Unmarshal(data, model); err != nil {
 			return err
 		}
 	}
 
-	// parse data
 	return nil
 
 }

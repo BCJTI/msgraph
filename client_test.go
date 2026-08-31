@@ -881,7 +881,9 @@ func TestRefreshUsesConfiguredHTTPClient(t *testing.T) {
 		TokenType:    "Bearer",
 		Expiry:       time.Now().Add(-time.Hour),
 	})
-	client.HTTPClient = &http.Client{Timeout: 50 * time.Millisecond}
+	transport := &countingTransport{next: http.DefaultTransport}
+	supplied := &http.Client{Timeout: 50 * time.Millisecond, Transport: transport}
+	client.HTTPClient = supplied
 
 	start := time.Now()
 	err := client.EnsureValidToken(context.Background())
@@ -895,6 +897,88 @@ func TestRefreshUsesConfiguredHTTPClient(t *testing.T) {
 	}
 	if !IsTransientAuthError(err) {
 		t.Errorf("IsTransientAuthError = false for %v, want a timeout reported as retryable", err)
+	}
+	if got := transport.count.Load(); got == 0 {
+		t.Error("the token endpoint was not reached through Client.HTTPClient's transport")
+	}
+	if supplied.Timeout != 50*time.Millisecond {
+		t.Errorf("Client.HTTPClient.Timeout = %s, want the caller's 50ms left untouched", supplied.Timeout)
+	}
+}
+
+// countingTransport counts the requests it carries, so a test can tell whether a
+// caller-supplied http.Client was really the one used.
+type countingTransport struct {
+	next  http.RoundTripper
+	count atomic.Int64
+}
+
+func (t *countingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	t.count.Add(1)
+	return t.next.RoundTrip(req)
+}
+
+// TestRefreshTimesOutWithoutConfiguredHTTPClient covers the default configuration:
+// with no HTTPClient set, a token endpoint that accepts the connection and never
+// answers must not wedge the Client, whose lock the refresh holds. The timeout has
+// to surface as a retryable failure, never as the expired-client-secret case a
+// human would be paged for.
+func TestRefreshTimesOutWithoutConfiguredHTTPClient(t *testing.T) {
+	release := make(chan struct{})
+
+	silent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-release
+	}))
+	defer func() {
+		close(release)
+		silent.Close()
+	}()
+
+	client := newTestClient(silent.URL, silent.URL, &oauth2.Token{
+		AccessToken:  "expired",
+		RefreshToken: "refresh-0",
+		TokenType:    "Bearer",
+		Expiry:       time.Now().Add(-time.Hour),
+	})
+	if client.HTTPClient != nil {
+		t.Fatal("test setup: HTTPClient must be unset to exercise the default")
+	}
+	client.tokenHTTPTimeout = 50 * time.Millisecond
+
+	done := make(chan error, 1)
+	go func() { done <- client.EnsureValidToken(context.Background()) }()
+
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("EnsureValidToken never returned: the default token client has no timeout")
+	}
+
+	if err == nil {
+		t.Fatal("EnsureValidToken: expected the default token timeout to abort the refresh, got nil")
+	}
+	if !IsTransientAuthError(err) {
+		t.Errorf("IsTransientAuthError = false for %v, want a timeout reported as retryable", err)
+	}
+	if IsPermanentAuthError(err) {
+		t.Errorf("IsPermanentAuthError = true for %v, want a slow token endpoint kept retryable", err)
+	}
+}
+
+// TestDefaultTokenTimeoutApplied checks the constant actually reaches the client
+// oauth2 uses when the caller supplies none.
+func TestDefaultTokenTimeoutApplied(t *testing.T) {
+	client := newTestClient("http://127.0.0.1:1/token", "http://127.0.0.1:1", nil)
+
+	if got := client.tokenHTTPClient().Timeout; got != defaultTokenHTTPTimeout {
+		t.Errorf("tokenHTTPClient().Timeout = %s, want %s", got, defaultTokenHTTPTimeout)
+	}
+
+	supplied := &http.Client{}
+	client.HTTPClient = supplied
+	if got := client.tokenHTTPClient(); got != supplied {
+		t.Error("tokenHTTPClient() replaced the caller-supplied http.Client")
 	}
 }
 
@@ -944,5 +1028,36 @@ func TestNextLinkFollowsClientEndpoint(t *testing.T) {
 		if seen[i] != uri {
 			t.Errorf("request %d hit %q, want %q", i, seen[i], uri)
 		}
+	}
+}
+
+// TestSuccessBodyDecodesIntoModel covers a 2xx body whose JSON shape does not fit
+// ErrMessage — here "message" is an object, not a string. The response is valid
+// and must decode into the caller's model instead of failing on the error-shape
+// probe that only the failure path needs.
+func TestSuccessBodyDecodesIntoModel(t *testing.T) {
+	graph := newGraphServer(t, func(call int, token string) (int, string) {
+		return http.StatusOK, `{"id":"AAA","message":{"content":"nested"}}`
+	})
+
+	client := newTestClient("http://127.0.0.1:1/token", graph.URL, &oauth2.Token{
+		AccessToken:  "still-good",
+		RefreshToken: "refresh-0",
+		TokenType:    "Bearer",
+		Expiry:       time.Now().Add(time.Hour),
+	})
+
+	var model struct {
+		ID      string `json:"id"`
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	}
+
+	if err := client.Get("/v1.0/me/messages/AAA", nil, nil, &model); err != nil {
+		t.Fatalf("Get returned %v, want the 2xx body decoded into the model", err)
+	}
+	if model.ID != "AAA" || model.Message.Content != "nested" {
+		t.Errorf("model = %+v, want ID \"AAA\" and Message.Content \"nested\"", model)
 	}
 }

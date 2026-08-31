@@ -23,6 +23,14 @@ var OAuthEndpoint = oauth2.Endpoint{
 // this margin absorbs clock skew plus the round trip of the call about to be made.
 const tokenRefreshWindow = 2 * time.Minute
 
+// defaultTokenHTTPTimeout bounds a call to the OAuth2 token endpoint when the
+// caller has not supplied an HTTPClient. The token endpoint gets a default
+// timeout that ordinary Graph calls do not because the refresh runs with the
+// Client lock held: a token endpoint that accepts the connection and never
+// answers would stall every goroutine sharing the Client, while an unbounded
+// Graph call only blocks its own caller.
+const defaultTokenHTTPTimeout = 30 * time.Second
+
 // Config defines the configuration for Client.
 // TenantID is optional; when empty it defaults to "common" (multi-tenant).
 type Config struct {
@@ -67,6 +75,9 @@ type Client struct {
 	OnTokenRefresh func(*oauth2.Token)
 	// baseURL overrides the Microsoft Graph base URL. Used by tests.
 	baseURL string
+	// tokenHTTPTimeout overrides defaultTokenHTTPTimeout for token endpoint calls
+	// made when HTTPClient is nil. Used by tests.
+	tokenHTTPTimeout time.Duration
 
 	// refreshSeq numbers every token the Client stores, so a delivery that lost the
 	// race to a newer one can be recognized as stale. Guarded by mu.
@@ -279,7 +290,25 @@ func (c *Client) refreshLocked(ctx context.Context) (*oauth2.Token, uint64, erro
 // has no timeout — and the refresh runs with c.mu held, so an endpoint that never
 // answers would stall every other caller indefinitely.
 func (c *Client) oauthContext(ctx context.Context) context.Context {
-	return context.WithValue(ctx, oauth2.HTTPClient, c.httpClient())
+	return context.WithValue(ctx, oauth2.HTTPClient, c.tokenHTTPClient())
+}
+
+// tokenHTTPClient returns the HTTP client used for OAuth2 token endpoint calls.
+// A caller-supplied HTTPClient is used exactly as given, timeout included: that
+// is the caller's choice. Only when none is set does the token path get its own
+// client carrying defaultTokenHTTPTimeout, instead of the untimed
+// http.DefaultClient the Graph path falls back to.
+func (c *Client) tokenHTTPClient() *http.Client {
+	if c.HTTPClient != nil {
+		return c.HTTPClient
+	}
+
+	timeout := c.tokenHTTPTimeout
+	if timeout <= 0 {
+		timeout = defaultTokenHTTPTimeout
+	}
+
+	return &http.Client{Timeout: timeout}
 }
 
 // ExchangeCodeForTokens exchanges authorization code for access and refresh tokens
