@@ -68,7 +68,7 @@ func (c *Client) ListMessagesByFolder(folderID string, opts *ListMessagesOptions
 // ListMessagesByNextLink follows an @odata.nextLink URL for pagination.
 // The nextLink is an absolute URL returned by a previous ListMessages call.
 func (c *Client) ListMessagesByNextLink(nextLink string) (*MessageListResponse, error) {
-	path := strings.TrimPrefix(nextLink, baseUrl)
+	path := strings.TrimPrefix(nextLink, c.endpoint())
 	result := &MessageListResponse{}
 
 	if err := c.Get(path, nil, nil, result); err != nil {
