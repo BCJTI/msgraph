@@ -76,9 +76,10 @@ type Client struct {
 	// Supplying an HTTPClient therefore replaces that default guard as well: set a
 	// timeout on it, or the token endpoint is unbounded again on the locked path.
 	HTTPClient *http.Client
-	// OnTokenRefresh, when set, is called with a copy of the new token every time
-	// the Client refreshes it. Callers that persist the refresh token should use
-	// this to store the rotated one, so the token survives a process restart.
+	// OnTokenRefresh, when set, is called with a copy of every token the Client
+	// acquires: each refresh, and the authorization code exchange. Callers that
+	// persist the refresh token should use this to store the rotated one, so the
+	// token survives a process restart.
 	//
 	// It is called without the Client's lock held, so a callback may use
 	// CurrentToken or SetToken. Deliveries are serialized and ordered: a delivery
