@@ -12,7 +12,9 @@ The `Client` owns its token. Callers do not have to schedule refreshes or restar
 anything when a token ages out:
 
 - Before every Graph call the access token is re-acquired from the refresh token
-  if it has expired or falls inside a two-minute refresh window.
+  if it has expired or falls inside a two-minute refresh window. A token carrying
+  no recorded expiry is used as-is rather than forced through a refresh; the `401`
+  retry below is what recovers it if it turns out to be dead.
 - If Graph answers `401` anyway — a token revoked early, or one whose recorded
   expiry was wrong — the token is re-acquired and the call is sent once more.
   Exactly once: a second `401` is reported, not retried.

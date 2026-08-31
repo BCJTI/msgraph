@@ -1061,3 +1061,74 @@ func TestSuccessBodyDecodesIntoModel(t *testing.T) {
 		t.Errorf("model = %+v, want ID \"AAA\" and Message.Content \"nested\"", model)
 	}
 }
+
+// TestZeroExpiryTokenIsUsedAsIs covers the backward-compatible case: a caller
+// that assigns an opaque access token with no expiry keeps working, because a
+// zero Expiry means "the issuer did not say", not "expired". The 401 retry is
+// what recovers if the token turns out to be dead.
+func TestZeroExpiryTokenIsUsedAsIs(t *testing.T) {
+	tokens := newTokenServer(t, nil)
+	graph := newGraphServer(t, okGraph)
+
+	client := newTestClient(tokens.URL, graph.URL, &oauth2.Token{
+		AccessToken:  "opaque-no-expiry",
+		RefreshToken: "refresh-0",
+		TokenType:    "Bearer",
+	})
+
+	var result struct{}
+
+	if err := client.Get("/me/messages", nil, nil, &result); err != nil {
+		t.Fatalf("Get: unexpected error: %v", err)
+	}
+
+	if got := tokens.calls.Load(); got != 0 {
+		t.Errorf("token endpoint calls = %d, want 0: a zero expiry must not force a refresh", got)
+	}
+
+	if got := graph.seenTokens(); len(got) != 1 || got[0] != "opaque-no-expiry" {
+		t.Errorf("graph saw tokens %v, want [opaque-no-expiry]", got)
+	}
+}
+
+// TestExchangeCodeForTokensStoresAndDelivers covers the success path of the
+// initial exchange: the token becomes the one the Client works with, and the
+// caller is handed it through OnTokenRefresh so it can be persisted.
+func TestExchangeCodeForTokensStoresAndDelivers(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"access_token":"exchanged-access","token_type":"Bearer","refresh_token":"exchanged-refresh","expires_in":3600}`)
+	}))
+	defer server.Close()
+
+	graph := newGraphServer(t, okGraph)
+
+	client := newTestClient(server.URL, graph.URL, nil)
+
+	var delivered []*oauth2.Token
+	client.OnTokenRefresh = func(token *oauth2.Token) { delivered = append(delivered, token) }
+
+	if err := client.ExchangeCodeForTokens(context.Background(), "auth-code"); err != nil {
+		t.Fatalf("ExchangeCodeForTokens: unexpected error: %v", err)
+	}
+
+	current := client.CurrentToken()
+	if current == nil || current.AccessToken != "exchanged-access" || current.RefreshToken != "exchanged-refresh" {
+		t.Fatalf("CurrentToken = %+v, want the exchanged access/refresh pair", current)
+	}
+
+	if len(delivered) != 1 || delivered[0].RefreshToken != "exchanged-refresh" {
+		t.Fatalf("OnTokenRefresh got %d deliveries (%+v), want one carrying exchanged-refresh", len(delivered), delivered)
+	}
+
+	// The exchanged token is what the next Graph call carries, with no extra
+	// round trip to the token endpoint.
+	var result struct{}
+	if err := client.Get("/me/messages", nil, nil, &result); err != nil {
+		t.Fatalf("Get: unexpected error: %v", err)
+	}
+
+	if got := graph.seenTokens(); len(got) != 1 || got[0] != "exchanged-access" {
+		t.Errorf("graph saw tokens %v, want [exchanged-access]", got)
+	}
+}
